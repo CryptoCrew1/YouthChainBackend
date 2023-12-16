@@ -1,12 +1,21 @@
 from typing import List
 
-from bson import json_util
+from bson import json_util, ObjectId
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # MongoDB Configuration
 MONGODB_URL = "mongodb://localhost:27017"
@@ -77,6 +86,18 @@ async def get_all_projects():
     return project_objects
 
 
+@app.get("/projects/{projectId}", response_model=ProjectBase)
+async def get_project(projectId: str):
+    # Retrieve the project from the MongoDB collection
+    project = await db.projects.find_one({"projectId": projectId})
+
+    if project:
+        # Convert BSON document to JSON and then to a ProjectBase object
+        return ProjectBase(**json_util.loads(json_util.dumps(project)))
+    else:
+        raise HTTPException(status_code=404, detail=f"Project with projectId {projectId} not found")
+
+
 @app.get("/user/projects/{ethereum_address}/", response_model=List[ProjectBase])
 async def get_user_projects(ethereum_address: str):
     # Check if the user exists in the database
@@ -119,6 +140,18 @@ async def get_all_events():
     event_objects = [Event(**json_util.loads(json_util.dumps(event))) for event in events]
 
     return event_objects
+
+
+@app.get("/events/{eventId}", response_model=Event)
+async def get_event(eventId: str):
+    # Retrieve the specific event from the MongoDB collection
+    event = await db["events"].find_one({"eventId": eventId})
+
+    if event:
+        # Convert BSON document to JSON and then to an Event object
+        return Event(**json_util.loads(json_util.dumps(event)))
+    else:
+        raise HTTPException(status_code=404, detail=f"Event with eventId {eventId} not found")
 
 
 @app.get("/user/events/{ethereum_address}/", response_model=List[Event])
@@ -190,3 +223,31 @@ async def remove_project_from_watchlist(request: WatchlistRequest):
     await db.users.update_one({"ethereumAddress": request.ethereum_address}, {"$set": existing_user})
 
     return {"message": f"Project ID {request.project_id} removed from the watchlist"}
+
+
+class EventCreate(BaseModel):
+    eventName: str
+    eventDescription: str
+    imageUrl: str
+    startDate: str  # You might want to use datetime or a proper format
+    endDate: str  # You might want to use datetime or a proper format
+    location: str
+    mainSpeaker: str
+    rules: str
+    neededVotes: int  # or str, depending on your data type
+
+
+class Event(EventCreate):
+    eventId: str
+    votes: int = 0
+
+
+@app.post("/addEvents/", response_model=Event)
+async def create_event(event_data: EventCreate):
+    event = event_data.dict()
+    event['eventId'] = str(ObjectId())  # Generate unique eventId
+    event['votes'] = 0  # Initialize votes to 0
+
+    # Insert the event into the MongoDB collection
+    await db["events"].insert_one(event)
+    return event
