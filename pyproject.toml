@@ -1,0 +1,19 @@
+[project]
+name = "YouthChainBackend"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "ShamyratAtayev", email = "samurad1310@gmail.com"},
+]
+dependencies = [
+    "uvicorn>=0.24.0.post1",
+    "fastapi>=0.105.0",
+    "motor>=3.3.2",
+]
+requires-python = "==3.10.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+package-type = "application"
