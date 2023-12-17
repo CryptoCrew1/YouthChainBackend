@@ -67,7 +67,7 @@ class ProjectBase(BaseModel):
     ProjectDescription: str
     Raised: int
     Investors: str
-    Votes: str
+    Votes: int
     MinInvestment: str
     Slogan: str
     Slogan2: str
@@ -133,12 +133,13 @@ class Event(BaseModel):
 
 @app.get("/events/", response_model=List[Event])
 async def get_all_events():
+    print("acas")
     # Retrieve all events from the MongoDB collection "events"
     events = await db["events"].find({}).to_list(None)
-
+    print("qweew")
     # Convert BSON documents to JSON and then to a list of Event objects
     event_objects = [Event(**json_util.loads(json_util.dumps(event))) for event in events]
-
+    print("acatrrts")
     return event_objects
 
 
@@ -228,7 +229,7 @@ async def remove_project_from_watchlist(request: WatchlistRequest):
 class EventCreate(BaseModel):
     eventName: str
     eventDescription: str
-    imageUrl: str
+    img: str
     startDate: str  # You might want to use datetime or a proper format
     endDate: str  # You might want to use datetime or a proper format
     location: str
@@ -242,7 +243,7 @@ class Event(EventCreate):
     votes: int = 0
 
 
-@app.post("/addEvents/", response_model=Event)
+@app.post("/addEvents/", response_model=str)
 async def create_event(event_data: EventCreate):
     event = event_data.dict()
     event['eventId'] = str(ObjectId())  # Generate unique eventId
@@ -250,4 +251,86 @@ async def create_event(event_data: EventCreate):
 
     # Insert the event into the MongoDB collection
     await db["events"].insert_one(event)
-    return event
+    return event['eventId']
+
+
+class EventAssociationRequest(BaseModel):
+    ethereumAddress: str
+    eventId: str
+
+@app.post("/associateEvent")
+async def associate_event(request: EventAssociationRequest):
+    # Extract data from the request
+    ethereum_address = request.ethereumAddress
+    event_id = request.eventId
+
+    # Find the user and update their events list
+    update_result = await db["users"].update_one(
+        {"ethereumAddress": ethereum_address},
+        {"$push": {"events": event_id}}
+    )
+
+    if update_result.modified_count == 0:
+        # If no user was updated, raise an exception
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Event associated successfully"}
+
+
+class ProjectCreate(BaseModel):
+    Industry: str
+    ImageUrl: str  # URL or path to the image
+    DaysLeft: int  # Consider using datetime
+    ProjectName: str    # Consider using datetime
+    ProjectDescription: str
+    Raised: float  # Assuming this is the project lead/manager
+    Investors: str
+    MinInvestment: str
+    Slogan: str
+    Slogan2: str
+    ReasonsToInvest: str
+
+
+class Project(ProjectCreate):
+    projectId: str
+    Votes: int = 0
+
+
+@app.post("/addProjects/", response_model=str)
+async def create_project(project_data: ProjectCreate):
+    print(4545)
+    project = project_data.dict()
+    project['projectId'] = str(ObjectId())  # Generate unique projectId
+    project['Votes'] = 0
+
+    # Insert the project into the MongoDB collection
+    try:
+        await db["projects"].insert_one(project)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return project['projectId']
+
+
+class ProjectAssociationRequest(BaseModel):
+    ethereumAddress: str
+    projectId: str
+
+
+@app.post("/associateProject")
+async def associate_project(request: ProjectAssociationRequest):
+    # Extract data from the request
+    ethereum_address = request.ethereumAddress
+    project_id = request.projectId
+
+    # Find the user and update their events list
+    update_result = await db["users"].update_one(
+        {"ethereumAddress": ethereum_address},
+        {"$push": {"projects": project_id}}
+    )
+
+    if update_result.modified_count == 0:
+        # If no user was updated, raise an exception
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Event associated successfully"}
